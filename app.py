@@ -7,6 +7,8 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from sqlalchemy import or_
 from sqlalchemy.pool import StaticPool
 from models import db, User, DirectThread, DirectMessage
+import cloudinary
+import cloudinary.uploader
 import secrets
 import os
 
@@ -19,6 +21,14 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'poolclass': StaticPool,
 }
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
+
+# ── Cloudinary config ──
+cloudinary.config(
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', ''),
+    api_key    = os.environ.get('CLOUDINARY_API_KEY', ''),
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET', ''),
+    secure     = True
+)
 
 db.init_app(app)
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins='*')
@@ -152,18 +162,34 @@ def inbox():
 def search():
     query = request.args.get('q', '').strip()
     users = []
+    suggestions = []
+
     if query:
         users = User.query.filter(
             User.username.ilike(f'%{query}%'),
             User.id != current_user.id
         ).limit(20).all()
-    return render_template('search.html', users=users, query=query)
+    else:
+        # People you haven't chatted with yet
+        existing_threads = DirectThread.query.filter(
+            or_(DirectThread.a_id == current_user.id, DirectThread.b_id == current_user.id)
+        ).all()
+        chatted_ids = set()
+        for t in existing_threads:
+            chatted_ids.add(t.b_id if t.a_id == current_user.id else t.a_id)
+        chatted_ids.add(current_user.id)
+
+        suggestions = User.query.filter(
+            User.id.notin_(chatted_ids)
+        ).order_by(User.status.desc()).limit(30).all()
+
+    return render_template('search.html', users=users, suggestions=suggestions, query=query)
 
 @app.route('/chat/<int:user_id>')
 @login_required
 def chat(user_id):
-    other   = User.query.get_or_404(user_id)
-    thread  = get_or_create_thread(current_user.id, other.id)
+    other    = User.query.get_or_404(user_id)
+    thread   = get_or_create_thread(current_user.id, other.id)
     messages = DirectMessage.query.filter_by(thread_id=thread.id)\
                 .order_by(DirectMessage.created_at.asc()).limit(200).all()
     return render_template('chat.html', thread=thread, other=other, messages=messages)
@@ -173,10 +199,35 @@ def chat(user_id):
 def profile():
     if request.method == 'POST':
         status = request.form.get('status', '').strip()[:120]
+        bio    = request.form.get('bio', '').strip()[:220]
         current_user.status = status or 'online'
+        current_user.bio    = bio
+
+        # Handle avatar upload to Cloudinary
+        file = request.files.get('avatar')
+        if file and file.filename:
+            allowed = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+            ext = file.filename.rsplit('.', 1)[-1].lower()
+            if ext not in allowed:
+                flash('Invalid image type. Use PNG, JPG, GIF or WEBP.', 'error')
+            else:
+                try:
+                    result = cloudinary.uploader.upload(
+                        file,
+                        public_id=f'quantumchat/avatars/user_{current_user.id}',
+                        overwrite=True,
+                        transformation=[
+                            {'width': 200, 'height': 200, 'crop': 'fill', 'gravity': 'face'}
+                        ]
+                    )
+                    current_user.avatar = result['secure_url']
+                except Exception as e:
+                    flash(f'Image upload failed: {str(e)}', 'error')
+
         db.session.commit()
         flash('Profile updated.', 'success')
         return redirect(url_for('profile'))
+
     return render_template('profile.html')
 
 # =============================================

@@ -12,8 +12,9 @@ class User(UserMixin, db.Model):
     username      = db.Column(db.String(30), unique=True, nullable=False)
     email         = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    avatar        = db.Column(db.String(255), default="default.png")
-    status        = db.Column(db.String(20), default="offline")
+    avatar        = db.Column(db.String(500), default=None)   # Cloudinary URL
+    status        = db.Column(db.String(120), default="offline")
+    bio           = db.Column(db.String(220), default=None)
     backup_codes  = db.Column(db.Text)
 
     def set_password(self, password):
@@ -23,7 +24,6 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
     def set_backup_codes(self, codes):
-        # Store hashed codes
         self.backup_codes = json.dumps([generate_password_hash(c) for c in codes])
 
     def consume_backup_code(self, code):
@@ -36,6 +36,14 @@ class User(UserMixin, db.Model):
                 self.backup_codes = json.dumps(hashes)
                 return True
         return False
+
+    @property
+    def avatar_url(self):
+        return self.avatar or None
+
+    @property
+    def initials(self):
+        return self.username[0].upper()
 
 
 class DirectThread(db.Model):
