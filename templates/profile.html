@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="auth-root">
+  <div class="auth-card">
+    <div class="auth-logo">{{ current_user.username[0].upper() }}</div>
+    <h1 class="auth-title">{{ current_user.username }}</h1>
+    <form method="post" class="auth-form">
+      <div class="field">
+        <label>Status</label>
+        <input name="status" value="{{ current_user.status or '' }}" maxlength="120" placeholder="What's your status?"/>
+      </div>
+      <button type="submit" class="btn-primary">Save</button>
+    </form>
+    <div class="auth-links">
+      <a href="{{ url_for('inbox') }}">← Back to chats</a>
+      <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

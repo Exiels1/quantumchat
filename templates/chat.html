@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="app-root">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-brand">⚡ QuantumChat</div>
+      <div class="sidebar-me">
+        <div class="me-avatar">{{ current_user.username[0].upper() }}</div>
+        <div>
+          <div class="me-name">{{ current_user.username }}</div>
+          <div class="me-status"><span class="online-dot"></span>Online</div>
+        </div>
+        <a href="{{ url_for('logout') }}" class="logout-btn" title="Logout">⏻</a>
+      </div>
+      <a href="{{ url_for('search') }}" class="search-btn"><span>🔍</span> Find people</a>
+    </div>
+    <div class="section-label">Messages</div>
+    <div class="chat-list" id="sidebarList">
+      <a href="{{ url_for('chat', user_id=other.id) }}" class="chat-item active">
+        <div class="chat-avatar">{{ other.username[0].upper() }}</div>
+        <div class="chat-info">
+          <div class="chat-name">{{ other.username }}</div>
+          <div class="chat-preview">
+            {% if other.status == 'online' %}<span style="color:#4ade80">● Online</span>{% else %}Offline{% endif %}
+          </div>
+        </div>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Chat panel -->
+  <main class="main-area">
+    <!-- Header -->
+    <div class="chat-header">
+      <a href="{{ url_for('inbox') }}" class="back-btn">←</a>
+      <div class="header-avatar">{{ other.username[0].upper() }}</div>
+      <div class="header-info">
+        <div class="header-name">{{ other.username }}</div>
+        <div class="header-status" id="headerStatus">
+          {% if other.status == 'online' %}
+            <span class="online-dot"></span>Online
+          {% else %}
+            Offline
+          {% endif %}
+        </div>
+      </div>
+      <button class="call-init-btn" id="callInitBtn" title="Voice call">📞</button>
+    </div>
+
+    <!-- Messages -->
+    <div class="messages-area" id="messagesArea">
+      {% if messages %}
+        {% for msg in messages %}
+        <div class="msg-wrap {{ 'sent' if msg.sender_id == current_user.id else 'received' }}">
+          <div class="msg-meta">
+            {{ 'You' if msg.sender_id == current_user.id else other.username }}
+            · {{ msg.created_at.strftime('%H:%M') }}
+          </div>
+          <div class="bubble">{{ msg.content }}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="no-messages" id="noMessages">
+          Say hello to {{ other.username }} 👋
+        </div>
+      {% endif %}
+      <div class="typing-indicator hidden" id="typingIndicator">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <input id="messageInput" autocomplete="off" placeholder="Message {{ other.username }}..."/>
+      <button id="sendBtn" class="send-btn">➤</button>
+    </div>
+  </main>
+</div>
+
+<!-- Call overlays injected by call.js -->
+<audio id="remoteAudio" autoplay playsinline></audio>
+
+<script>
+  const THREAD_ID    = {{ thread.id }};
+  const CURRENT_USER = "{{ current_user.username }}";
+  const OTHER_USER   = "{{ other.username }}";
+</script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/call.js') }}"></script>
+{% endblock %}

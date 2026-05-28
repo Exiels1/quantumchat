@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Database files
+*.db
+*.sqlite3
+
+# Flask session / uploads
+instance/
+static/uploads/
+
+# Logs and runtime
+*.log
+*.pot
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Python packaging
+*.egg-info/
+build/
+dist/
+
+# Secrets
+.env
+
+# Heroku
+Procfile
+runtime.txt

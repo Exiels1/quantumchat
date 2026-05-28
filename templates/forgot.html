@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="auth-root">
+  <div class="auth-card">
+    <div class="auth-logo">🔑</div>
+    <h1 class="auth-title">Reset Password</h1>
+    <p class="auth-sub">Use one of your backup codes</p>
+    <form method="post" class="auth-form">
+      <div class="field">
+        <label>Username</label>
+        <input name="username" required placeholder="your username"/>
+      </div>
+      <div class="field">
+        <label>Backup Code</label>
+        <input name="code" required placeholder="xxxxxxxx"/>
+      </div>
+      <div class="field">
+        <label>New Password</label>
+        <input name="password" type="password" required minlength="6" placeholder="min 6 characters"/>
+      </div>
+      <button type="submit" class="btn-primary">Reset Password</button>
+    </form>
+    <div class="auth-links">
+      <a href="{{ url_for('login') }}">Back to login</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

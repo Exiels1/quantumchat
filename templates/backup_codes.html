@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="auth-root">
+  <div class="auth-card" style="max-width:460px">
+    <div class="auth-logo">🔐</div>
+    <h1 class="auth-title">Save Your Backup Codes</h1>
+    <p class="auth-sub">Store these somewhere safe. Each code can only be used once to reset your password.</p>
+    <div class="codes-grid">
+      {% for code in codes %}
+        <div class="code-pill">{{ code }}</div>
+      {% endfor %}
+    </div>
+    <a href="{{ url_for('login') }}" class="btn-primary" style="display:block;text-align:center;text-decoration:none;margin-top:20px;">I've saved them — Go to Login</a>
+  </div>
+</div>
+{% endblock %}

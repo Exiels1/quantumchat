@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="app-root">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-brand">⚡ QuantumChat</div>
+      <div class="sidebar-me">
+        <div class="me-avatar">{{ current_user.username[0].upper() }}</div>
+        <div>
+          <div class="me-name">{{ current_user.username }}</div>
+          <div class="me-status">
+            <span class="online-dot"></span>Online
+          </div>
+        </div>
+        <a href="{{ url_for('logout') }}" class="logout-btn" title="Logout">⏻</a>
+      </div>
+      <a href="{{ url_for('search') }}" class="search-btn">
+        <span>🔍</span> Find people
+      </a>
+    </div>
+
+    <div class="section-label">Messages</div>
+
+    <div class="chat-list">
+      {% if chats %}
+        {% for c in chats %}
+        <a href="{{ url_for('chat', user_id=c.other.id) }}" class="chat-item">
+          <div class="chat-avatar">{{ c.other.username[0].upper() }}</div>
+          <div class="chat-info">
+            <div class="chat-name">{{ c.other.username }}</div>
+            <div class="chat-preview">
+              {% if c.last %}
+                {{ c.last.content[:40] }}{% if c.last.content|length > 40 %}...{% endif %}
+              {% else %}
+                No messages yet
+              {% endif %}
+            </div>
+          </div>
+          <div class="chat-meta">
+            {% if c.other.status == 'online' %}
+              <span class="online-dot"></span>
+            {% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <div class="empty-icon">💬</div>
+          <div>No conversations yet</div>
+          <a href="{{ url_for('search') }}">Find someone to chat with →</a>
+        </div>
+      {% endif %}
+    </div>
+  </aside>
+
+  <!-- Empty state main -->
+  <main class="main-area empty-main">
+    <div class="welcome-state">
+      <div class="welcome-icon">⚡</div>
+      <h2>QuantumChat</h2>
+      <p>Select a conversation or find someone new to chat with.</p>
+      <a href="{{ url_for('search') }}" class="btn-primary" style="display:inline-block;text-decoration:none;margin-top:8px;">Find people</a>
+    </div>
+  </main>
+</div>
+{% endblock %}

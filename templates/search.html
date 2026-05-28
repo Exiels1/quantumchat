@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="app-root">
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-brand">⚡ QuantumChat</div>
+      <a href="{{ url_for('inbox') }}" class="search-btn">← Back to chats</a>
+    </div>
+    <div class="section-label">Find People</div>
+    <form method="get" class="search-form">
+      <input name="q" value="{{ query }}" placeholder="Search by username..." autocomplete="off" autofocus/>
+      <button type="submit">Search</button>
+    </form>
+    <div class="chat-list">
+      {% if users %}
+        {% for u in users %}
+        <a href="{{ url_for('chat', user_id=u.id) }}" class="chat-item">
+          <div class="chat-avatar">{{ u.username[0].upper() }}</div>
+          <div class="chat-info">
+            <div class="chat-name">{{ u.username }}</div>
+            <div class="chat-preview">
+              {% if u.status == 'online' %}<span style="color:#4ade80">● Online</span>{% else %}Offline{% endif %}
+            </div>
+          </div>
+        </a>
+        {% endfor %}
+      {% elif query %}
+        <div class="empty-state">No users found for "{{ query }}"</div>
+      {% endif %}
+    </div>
+  </aside>
+  <main class="main-area empty-main">
+    <div class="welcome-state">
+      <div class="welcome-icon">🔍</div>
+      <h2>Search for people</h2>
+      <p>Type a username to find someone and start chatting.</p>
+    </div>
+  </main>
+</div>
+{% endblock %}

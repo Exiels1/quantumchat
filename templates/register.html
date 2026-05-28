@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="auth-root">
+  <div class="auth-card">
+    <div class="auth-logo">⚡</div>
+    <h1 class="auth-title">Create Account</h1>
+    <p class="auth-sub">No phone number needed</p>
+    <form method="post" class="auth-form">
+      <div class="field">
+        <label>Username</label>
+        <input name="username" required minlength="3" maxlength="30" placeholder="choose a username"/>
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input name="email" type="email" required placeholder="your@email.com"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input name="password" type="password" required minlength="6" placeholder="min 6 characters"/>
+      </div>
+      <button type="submit" class="btn-primary">Create Account</button>
+    </form>
+    <div class="auth-links">
+      <a href="{{ url_for('login') }}">Already have an account?</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
