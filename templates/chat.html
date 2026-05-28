@@ -6,6 +6,15 @@
     <div class="sidebar-top">
       <div class="sidebar-brand">⚡ QuantumChat</div>
       <div class="sidebar-me">
+        <div class="sidebar-me">
+  <div class="me-avatar">{{ current_user.username[0].upper() }}</div>
+  <div>
+    <div class="me-name">{{ current_user.username }}</div>
+    <div class="me-status"><span class="online-dot"></span>Online</div>
+  </div>
+  <a href="{{ url_for('profile') }}" class="logout-btn" title="Profile">⚙</a>
+  <a href="{{ url_for('logout') }}" class="logout-btn" title="Logout">⏻</a>
+</div>
         <div class="me-avatar">{{ current_user.username[0].upper() }}</div>
         <div>
           <div class="me-name">{{ current_user.username }}</div>
