@@ -22,7 +22,6 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 }
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 
-# ── Cloudinary config ──
 cloudinary.config(
     cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', ''),
     api_key    = os.environ.get('CLOUDINARY_API_KEY', ''),
@@ -43,7 +42,6 @@ def load_user(user_id):
 with app.app_context():
     db.create_all()
 
-# ── helpers ──
 def make_codes(n=8):
     return [secrets.token_hex(4) for _ in range(n)]
 
@@ -75,7 +73,6 @@ def register():
         username = request.form.get('username', '').strip()
         email    = request.form.get('email', '').strip()
         password = request.form.get('password', '')
-
         if not (3 <= len(username) <= 30):
             flash('Username must be 3-30 characters.', 'error')
             return render_template('register.html')
@@ -85,16 +82,13 @@ def register():
         if User.query.filter((User.username == username) | (User.email == email)).first():
             flash('Username or email already taken.', 'error')
             return render_template('register.html')
-
         user = User(username=username, email=email)
         user.set_password(password)
         codes = make_codes()
         user.set_backup_codes(codes)
         db.session.add(user)
         db.session.commit()
-
         return render_template('backup_codes.html', codes=codes, username=username)
-
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -163,14 +157,12 @@ def search():
     query = request.args.get('q', '').strip()
     users = []
     suggestions = []
-
     if query:
         users = User.query.filter(
             User.username.ilike(f'%{query}%'),
             User.id != current_user.id
         ).limit(20).all()
     else:
-        # People you haven't chatted with yet
         existing_threads = DirectThread.query.filter(
             or_(DirectThread.a_id == current_user.id, DirectThread.b_id == current_user.id)
         ).all()
@@ -178,11 +170,9 @@ def search():
         for t in existing_threads:
             chatted_ids.add(t.b_id if t.a_id == current_user.id else t.a_id)
         chatted_ids.add(current_user.id)
-
         suggestions = User.query.filter(
             User.id.notin_(chatted_ids)
         ).order_by(User.status.desc()).limit(30).all()
-
     return render_template('search.html', users=users, suggestions=suggestions, query=query)
 
 @app.route('/chat/<int:user_id>')
@@ -202,14 +192,12 @@ def profile():
         bio    = request.form.get('bio', '').strip()[:220]
         current_user.status = status or 'online'
         current_user.bio    = bio
-
-        # Handle avatar upload to Cloudinary
         file = request.files.get('avatar')
         if file and file.filename:
             allowed = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
             ext = file.filename.rsplit('.', 1)[-1].lower()
             if ext not in allowed:
-                flash('Invalid image type. Use PNG, JPG, GIF or WEBP.', 'error')
+                flash('Invalid image type.', 'error')
             else:
                 try:
                     result = cloudinary.uploader.upload(
@@ -223,11 +211,9 @@ def profile():
                     current_user.avatar = result['secure_url']
                 except Exception as e:
                     flash(f'Image upload failed: {str(e)}', 'error')
-
         db.session.commit()
         flash('Profile updated.', 'success')
         return redirect(url_for('profile'))
-
     return render_template('profile.html')
 
 # =============================================
@@ -247,9 +233,7 @@ def on_connect():
 
 @socketio.on('disconnect')
 def on_disconnect():
-    if current_user.is_authenticated:
-        current_user.status = 'offline'
-        db.session.commit()
+    pass
 
 @socketio.on('join')
 def on_join(data):
@@ -265,9 +249,6 @@ def handle_message(data):
     thread_id = data.get('thread')
     content   = (data.get('message') or '').strip()
     if not (thread_id and content):
-        return
-    thread = DirectThread.query.get(thread_id)
-    if not thread or current_user.id not in (thread.a_id, thread.b_id):
         return
     msg = DirectMessage(thread_id=thread_id, sender_id=current_user.id, content=content)
     db.session.add(msg)
