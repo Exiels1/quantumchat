@@ -50,3 +50,4 @@ A Flask + Socket.IO chat application with authentication, direct messaging, and 
 - `app.py` uses SQLite by default, stored in `quantumchat.db`.
 - Set `FLASK_SECRET` and `DATABASE_URL` in environment variables for production.
 - `instance/` and `static/uploads/` are ignored so local secrets and uploads stay private.
+- On Render free tier, ping `/health` every 4 minutes with cron-job.org, UptimeRobot, or the script in `keep-awake.md` to reduce cold starts.

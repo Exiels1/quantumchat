@@ -1,6 +1,11 @@
-const socket = io();
-
-socket.emit('join', { thread: THREAD_ID });
+const socket = io({
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 10000,
+  timeout: 20000,
+});
 
 const input      = document.getElementById('messageInput');
 const sendBtn    = document.getElementById('sendBtn');
@@ -9,6 +14,18 @@ const typingEl   = document.getElementById('typingIndicator');
 const noMessages = document.getElementById('noMessages');
 
 let typingTimer;
+
+socket.on('connect', () => {
+  socket.emit('join', { thread: THREAD_ID });
+});
+
+socket.on('message_error', data => {
+  console.warn(data?.error || 'Message failed.');
+});
+
+socket.on('socket_error', data => {
+  console.warn(data?.error || 'Realtime connection error.');
+});
 
 function timeNow() {
   const d = new Date();

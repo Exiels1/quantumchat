@@ -1,26 +1,47 @@
 import eventlet
 eventlet.monkey_patch()
 
-from flask import Flask, render_template, redirect, request, url_for, flash
+from dotenv import load_dotenv
+load_dotenv()
+
+from flask import Flask, render_template, redirect, request, url_for, flash, jsonify
 from flask_socketio import SocketIO, emit, join_room
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from sqlalchemy.pool import StaticPool
 from models import db, User, DirectThread, DirectMessage
 import cloudinary
 import cloudinary.uploader
 import secrets
 import os
+import logging
 
 app = Flask(__name__)
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///quantumchat.db')
+if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
 app.config['SECRET_KEY']                = os.environ.get('FLASK_SECRET', 'change-me-in-prod')
-app.config['SQLALCHEMY_DATABASE_URI']   = os.environ.get('DATABASE_URL', 'sqlite:///quantumchat.db')
+app.config['SQLALCHEMY_DATABASE_URI']   = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'connect_args': {'check_same_thread': False},
-    'poolclass': StaticPool,
-}
+if database_url.startswith('sqlite'):
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'connect_args': {'check_same_thread': False},
+        'poolclass': StaticPool,
+    }
+else:
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+        'pool_size': int(os.environ.get('DB_POOL_SIZE', '2')),
+        'max_overflow': int(os.environ.get('DB_MAX_OVERFLOW', '0')),
+    }
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
+
+logging.basicConfig(
+    level=os.environ.get('LOG_LEVEL', 'INFO').upper(),
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+)
 
 cloudinary.config(
     cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', ''),
@@ -30,7 +51,17 @@ cloudinary.config(
 )
 
 db.init_app(app)
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins='*')
+socketio = SocketIO(
+    app,
+    async_mode='eventlet',
+    cors_allowed_origins=os.environ.get('SOCKETIO_CORS_ORIGINS', '*'),
+    ping_timeout=60,
+    ping_interval=25,
+    max_http_buffer_size=100000,
+    logger=False,
+    engineio_logger=False,
+    manage_session=False,
+)
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
@@ -66,6 +97,15 @@ def home():
     if current_user.is_authenticated:
         return redirect(url_for('inbox'))
     return redirect(url_for('login'))
+
+@app.route('/health')
+def health():
+    try:
+        db.session.execute(text('SELECT 1'))
+        return jsonify({'status': 'ok'}), 200
+    except Exception:
+        app.logger.exception('Health check failed')
+        return jsonify({'status': 'error'}), 503
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -223,57 +263,79 @@ def profile():
 @socketio.on('connect')
 def on_connect():
     if not current_user.is_authenticated:
+        app.logger.info('Rejected unauthenticated socket connection')
         return False
-    join_room(user_room(current_user.username))
-    threads = DirectThread.query.filter(
-        or_(DirectThread.a_id == current_user.id, DirectThread.b_id == current_user.id)
-    ).all()
-    for t in threads:
-        join_room(f'dm_{t.id}')
+    try:
+        join_room(user_room(current_user.username))
+        threads = DirectThread.query.filter(
+            or_(DirectThread.a_id == current_user.id, DirectThread.b_id == current_user.id)
+        ).limit(100).all()
+        for t in threads:
+            join_room(f'dm_{t.id}')
+    except Exception:
+        app.logger.exception('Socket connect setup failed')
+        return False
 
 @socketio.on('disconnect')
 def on_disconnect():
-    pass
+    if current_user.is_authenticated:
+        app.logger.debug('Socket disconnected for user %s', current_user.id)
 
 @socketio.on('join')
 def on_join(data):
-    thread_id = data.get('thread')
-    thread = DirectThread.query.get(thread_id)
-    if thread and current_user.id in (thread.a_id, thread.b_id):
-        join_room(f'dm_{thread_id}')
+    if not current_user.is_authenticated:
+        return
+    try:
+        thread_id = data.get('thread')
+        thread = DirectThread.query.get(thread_id)
+        if thread and current_user.id in (thread.a_id, thread.b_id):
+            join_room(f'dm_{thread_id}')
+    except Exception:
+        app.logger.exception('Join room failed')
 
 @socketio.on('send_message')
 def handle_message(data):
     if not current_user.is_authenticated:
         return
-    thread_id = data.get('thread')
-    content   = (data.get('message') or '').strip()
-    if not (thread_id and content):
-        return
-    msg = DirectMessage(thread_id=thread_id, sender_id=current_user.id, content=content)
-    db.session.add(msg)
-    db.session.commit()
-    emit('receive_message', {
-        'message':    msg.content,
-        'sender':     current_user.username,
-        'sender_id':  current_user.id,
-        'created_at': msg.created_at.strftime('%H:%M'),
-        'thread':     thread_id,
-    }, to=f'dm_{thread_id}')
+    try:
+        thread_id = data.get('thread')
+        content   = (data.get('message') or '').strip()[:2000]
+        if not (thread_id and content):
+            return
+        thread = DirectThread.query.get(thread_id)
+        if not thread or current_user.id not in (thread.a_id, thread.b_id):
+            emit('message_error', {'error': 'Invalid chat thread.'})
+            return
+        msg = DirectMessage(thread_id=thread_id, sender_id=current_user.id, content=content)
+        db.session.add(msg)
+        db.session.commit()
+        emit('receive_message', {
+            'message':    msg.content,
+            'sender':     current_user.username,
+            'sender_id':  current_user.id,
+            'created_at': msg.created_at.strftime('%H:%M'),
+            'thread':     thread_id,
+        }, to=f'dm_{thread_id}')
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('Message send failed')
+        emit('message_error', {'error': 'Message could not be sent. Please try again.'})
 
 @socketio.on('typing')
 def on_typing(data):
     if not current_user.is_authenticated:
         return
     thread_id = data.get('thread')
-    emit('typing', {'user': current_user.username}, to=f'dm_{thread_id}', include_self=False)
+    if thread_id:
+        emit('typing', {'user': current_user.username}, to=f'dm_{thread_id}', include_self=False)
 
 @socketio.on('stop_typing')
 def on_stop_typing(data):
     if not current_user.is_authenticated:
         return
     thread_id = data.get('thread')
-    emit('stop_typing', {}, to=f'dm_{thread_id}', include_self=False)
+    if thread_id:
+        emit('stop_typing', {}, to=f'dm_{thread_id}', include_self=False)
 
 # =============================================
 # SOCKETIO — CALL SIGNALING
@@ -330,5 +392,12 @@ def on_ice(data):
     target = (data.get('target') or '').strip()
     emit('ice_candidate', {'candidate': data.get('candidate'), 'from': current_user.username}, to=user_room(target))
 
+@socketio.on_error_default
+def socket_error_handler(error):
+    app.logger.exception('Socket.IO error: %s', error)
+    emit('socket_error', {'error': 'A realtime connection error occurred.'})
+
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get('PORT', '5000'))
+    debug = os.environ.get('FLASK_DEBUG', '0') == '1'
+    socketio.run(app, host='0.0.0.0', port=port, debug=debug)
