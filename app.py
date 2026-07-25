@@ -267,11 +267,6 @@ def on_connect():
         return False
     try:
         join_room(user_room(current_user.username))
-        threads = DirectThread.query.filter(
-            or_(DirectThread.a_id == current_user.id, DirectThread.b_id == current_user.id)
-        ).limit(100).all()
-        for t in threads:
-            join_room(f'dm_{t.id}')
     except Exception:
         app.logger.exception('Socket connect setup failed')
         return False

@@ -14,9 +14,14 @@ const typingEl   = document.getElementById('typingIndicator');
 const noMessages = document.getElementById('noMessages');
 
 let typingTimer;
+let queuedMessage = null;
 
 socket.on('connect', () => {
   socket.emit('join', { thread: THREAD_ID });
+  if (queuedMessage) {
+    socket.emit('send_message', queuedMessage);
+    queuedMessage = null;
+  }
 });
 
 socket.on('message_error', data => {
@@ -48,15 +53,23 @@ function appendMessage(content, isMine, senderName) {
 function sendMessage() {
   const text = input.value.trim();
   if (!text) return;
-  socket.emit('send_message', { thread: THREAD_ID, message: text });
+  const payload = { thread: THREAD_ID, message: text };
+  if (socket.connected) {
+    socket.emit('send_message', payload);
+  } else {
+    queuedMessage = payload;
+  }
   appendMessage(text, true, CURRENT_USER);
   input.value = '';
-  socket.emit('stop_typing', { thread: THREAD_ID });
+  if (socket.connected) {
+    socket.emit('stop_typing', { thread: THREAD_ID });
+  }
 }
 
 sendBtn.addEventListener('click', sendMessage);
 input.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); sendMessage(); return; }
+  if (!socket.connected) return;
   socket.emit('typing', { thread: THREAD_ID });
   clearTimeout(typingTimer);
   typingTimer = setTimeout(() => socket.emit('stop_typing', { thread: THREAD_ID }), 1000);
