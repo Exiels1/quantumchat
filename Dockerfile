@@ -17,4 +17,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["gunicorn", "-k", "eventlet", "-w", "1", "--timeout", "120", "app:app"]
+CMD ["gunicorn", "-k", "eventlet", "-w", "1", "--threads", "1", "--timeout", "120", "--keep-alive", "5", "app:app"]

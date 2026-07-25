@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from flask import Flask, render_template, redirect, request, url_for, flash, jsonify
+from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from sqlalchemy import or_, text
@@ -15,11 +16,16 @@ import cloudinary.uploader
 import secrets
 import os
 import logging
+import subprocess
+import time
 
 app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": os.environ.get('SOCKETIO_CORS_ORIGINS', '*')}})
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///quantumchat.db')
 if database_url.startswith('postgres://'):
-    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    database_url = database_url.replace('postgres://', 'postgresql+pg8000://', 1)
+elif database_url.startswith('postgresql://'):
+    database_url = database_url.replace('postgresql://', 'postgresql+pg8000://', 1)
 
 app.config['SECRET_KEY']                = os.environ.get('FLASK_SECRET', 'change-me-in-prod')
 app.config['SQLALCHEMY_DATABASE_URI']   = database_url
@@ -33,7 +39,7 @@ else:
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'pool_size': int(os.environ.get('DB_POOL_SIZE', '2')),
+        'pool_size': int(os.environ.get('DB_POOL_SIZE', '1')),
         'max_overflow': int(os.environ.get('DB_MAX_OVERFLOW', '0')),
     }
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
@@ -57,7 +63,8 @@ socketio = SocketIO(
     cors_allowed_origins=os.environ.get('SOCKETIO_CORS_ORIGINS', '*'),
     ping_timeout=60,
     ping_interval=25,
-    max_http_buffer_size=100000,
+    always_connect=True,
+    max_http_buffer_size=1024,
     logger=False,
     engineio_logger=False,
     manage_session=False,
@@ -78,6 +85,19 @@ def make_codes(n=8):
 
 def user_room(username):
     return f'user_{username}'
+
+def current_memory_kb():
+    try:
+        result = subprocess.run(
+            ['ps', '-o', 'vsz=', '-p', str(os.getpid())],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        return int(result.stdout.strip())
+    except Exception:
+        return None
 
 def get_or_create_thread(uid_a, uid_b):
     a, b = sorted([uid_a, uid_b])
@@ -102,7 +122,11 @@ def home():
 def health():
     try:
         db.session.execute(text('SELECT 1'))
-        return jsonify({'status': 'ok'}), 200
+        return jsonify({
+            'status': 'ok',
+            'timestamp': time.time(),
+            'memory_kb': current_memory_kb(),
+        }), 200
     except Exception:
         app.logger.exception('Health check failed')
         return jsonify({'status': 'error'}), 503
@@ -294,7 +318,7 @@ def handle_message(data):
         return
     try:
         thread_id = data.get('thread')
-        content   = (data.get('message') or '').strip()[:2000]
+        content   = (data.get('message') or '').strip()[:900]
         if not (thread_id and content):
             return
         thread = DirectThread.query.get(thread_id)

@@ -51,7 +51,7 @@ function appendMessage(content, isMine, senderName) {
 }
 
 function sendMessage() {
-  const text = input.value.trim();
+  const text = input.value.trim().slice(0, 900);
   if (!text) return;
   const payload = { thread: THREAD_ID, message: text };
   if (socket.connected) {

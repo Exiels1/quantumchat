@@ -1,30 +1,51 @@
 services:
   - type: web
     name: quantumchat
-    env: python
-    plan: free
+    runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -k eventlet -w 1 --timeout 120 app:app
-    healthCheckPath: /health
-    autoDeploy: true
+    startCommand: gunicorn -k eventlet -w 1 --threads 1 --timeout 120 --keep-alive 5 app:app
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: FLASK_SECRET
-        sync: false
+        generateValue: true
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: quantumchat_db
+          property: connectionString
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: quantumchat_cache
+          property: connectionString
+      - key: WEB_CONCURRENCY
+        value: "1"
       - key: SOCKETIO_CORS_ORIGINS
         value: "*"
       - key: LOG_LEVEL
         value: INFO
       - key: DB_POOL_SIZE
-        value: "2"
+        value: "1"
       - key: DB_MAX_OVERFLOW
         value: "0"
       - key: PYTHONUNBUFFERED
         value: "1"
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+
+  - type: keyvalue
+    name: quantumchat_cache
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+
+databases:
+  - name: quantumchat_db
+    plan: free
